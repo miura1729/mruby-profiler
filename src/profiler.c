@@ -27,6 +27,7 @@ static struct prof_root result;
 static mrb_irep *old_irep = NULL;
 static mrb_code *old_pc = NULL;
 static double old_time = 0.0;
+static mrb_value prof_module;
 
 void
 mrb_profiler_reallocinfo(mrb_state* mrb)
@@ -104,9 +105,9 @@ mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
   const char *str;
   mrb_get_args(mrb, "ii", &irepno, &iseqoff);
 
+  res = mrb_ary_new_capa(mrb, 5);
   str = result.pirep[irepno].irep->filename;
   if (str) {
-    res = mrb_ary_new_capa(mrb, 5);
     mrb_ary_push(mrb, res, mrb_str_new(mrb, str, strlen(str)));
   }
   else {
@@ -135,6 +136,7 @@ mrb_mruby_profiler_gem_init(mrb_state* mrb) {
 
   mrb_profiler_reallocinfo(mrb);
   m = (struct RObject *)mrb_define_module(mrb, "Profiler");
+  prof_module = mrb_obj_value(m);
   mrb->code_fetch_hook = prof_code_fetch_hook;
   mrb_define_singleton_method(mrb, m, "get_prof_info",  
 			      mrb_mruby_profiler_get_prof_info, MRB_ARGS_REQ(2));
@@ -144,44 +146,5 @@ mrb_mruby_profiler_gem_init(mrb_state* mrb) {
 
 void
 mrb_mruby_profiler_gem_final(mrb_state* mrb) {
-  int i;
-  int j;
-  for (i = 0; i < result.irep_len; i++) {
-    mrb_irep *irep;
-    int *nums;
-    int maxlines = 0;
-    int minlines = 99999;
-    FILE *fp;
-
-    irep = mrb->irep[i];
-    if (irep->filename == NULL) {
-      continue;
-    }
-    printf("   %s \n", irep->filename);
-
-    if (irep->lines == NULL) {
-      continue;
-    }
-
-    for (j = 0; j < irep->ilen; j++) {
-      maxlines = (maxlines < irep->lines[j]) ? irep->lines[j] : maxlines;
-      minlines = (minlines > irep->lines[j]) ? irep->lines[j] : minlines;
-    }
-    nums = alloca((maxlines + 1) * sizeof(int));
-    for (j = 0; j < irep->ilen; j++) {
-      nums[j] = 0;
-    }
-
-    for (j = 0; j < irep->ilen; j++) {
-      nums[irep->lines[j]] += result.pirep[i].cnt[j].num;
-    }
-
-    fp = fopen(irep->filename, "r");
-    for (j = minlines; j < maxlines; j++) {
-      char buf[256];
-      fgets(buf, 256, fp);
-      printf("%d   %d  %s", j, nums[j], buf);
-    }
-    fclose(fp);
-  }
+  mrb_funcall(mrb, prof_module, "analyze", 0);
 }
