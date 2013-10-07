@@ -68,10 +68,10 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
     mrb_profiler_reallocinfo(mrb);
   }
   gettimeofday(&tv, NULL);
-  curtime = (double)tv.tv_sec + ((double)tv.tv_usec / 1e-6);
+  curtime = ((double)tv.tv_sec) + ((double)tv.tv_usec * 1e-6);
   if (old_irep) {
     off = old_pc - old_irep->iseq;
-    result.pirep[old_irep->idx].cnt[off].time = curtime - old_time;
+    result.pirep[old_irep->idx].cnt[off].time += (curtime - old_time);
   }
   
   off = pc - irep->iseq;
@@ -94,6 +94,27 @@ mrb_mruby_profiler_ilen(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "i", &irepno);
   
   return mrb_fixnum_value(result.pirep[irepno].irep->ilen);
+}
+
+static mrb_value
+mrb_mruby_profiler_read(mrb_state *mrb, mrb_value self)
+{
+  char *fn;
+  int len;
+  mrb_value res;
+  FILE *fp;
+  char buf[256];
+
+  mrb_get_args(mrb, "s", &fn, &len);
+  fn[len] = '\0';
+
+  res = mrb_ary_new_capa(mrb, 5);
+  fp = fopen(fn, "r");
+  while (fgets(buf, 255, fp)) {
+    mrb_ary_push(mrb, res, mrb_str_new(mrb, buf, strlen(buf)));
+  }
+  fclose(fp);
+  return res;
 }
 
 static mrb_value
@@ -142,6 +163,7 @@ mrb_mruby_profiler_gem_init(mrb_state* mrb) {
 			      mrb_mruby_profiler_get_prof_info, MRB_ARGS_REQ(2));
   mrb_define_singleton_method(mrb, m, "irep_len", mrb_mruby_profiler_irep_len, MRB_ARGS_NONE());
   mrb_define_singleton_method(mrb, m, "ilen", mrb_mruby_profiler_ilen, MRB_ARGS_REQ(1));
+  mrb_define_singleton_method(mrb, m, "read", mrb_mruby_profiler_read, MRB_ARGS_REQ(1));
 }
 
 void
