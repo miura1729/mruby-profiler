@@ -1,10 +1,12 @@
 /* Profiler for ruby */
 #include "mruby.h"
 #include "mruby/irep.h"
+#include "mruby/array.h"
 #include <time.h>
 #include <sys/time.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 struct prof_counter {
   double time;
@@ -65,7 +67,7 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
     mrb_profiler_reallocinfo(mrb);
   }
   gettimeofday(&tv, NULL);
-  curtime = (double)tv.tv_sec + ((double)tv.tv_usec / 1000.0);
+  curtime = (double)tv.tv_sec + ((double)tv.tv_usec / 1e-6);
   if (old_irep) {
     off = old_pc - old_irep->iseq;
     result.pirep[old_irep->idx].cnt[off].time = curtime - old_time;
@@ -78,10 +80,66 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
   old_time = curtime;
 }
 
+static mrb_value
+mrb_mruby_profiler_irep_len(mrb_state *mrb, mrb_value self)
+{
+  return mrb_fixnum_value(result.irep_len);
+}
+
+static mrb_value
+mrb_mruby_profiler_ilen(mrb_state *mrb, mrb_value self)
+{
+  mrb_int irepno;
+  mrb_get_args(mrb, "i", &irepno);
+  
+  return mrb_fixnum_value(result.pirep[irepno].irep->ilen);
+}
+
+static mrb_value
+mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
+{
+  mrb_int irepno;
+  mrb_int iseqoff;
+  mrb_value res;
+  const char *str;
+  mrb_get_args(mrb, "ii", &irepno, &iseqoff);
+
+  str = result.pirep[irepno].irep->filename;
+  if (str) {
+    res = mrb_ary_new_capa(mrb, 5);
+    mrb_ary_push(mrb, res, mrb_str_new(mrb, str, strlen(str)));
+  }
+  else {
+    mrb_ary_push(mrb, res, mrb_nil_value());
+  }
+
+  if (result.pirep[irepno].irep->lines) {
+    mrb_ary_push(mrb, res, 
+		 mrb_fixnum_value(result.pirep[irepno].irep->lines[iseqoff]));
+  }
+  else {
+    mrb_ary_push(mrb, res, mrb_nil_value());
+  }
+
+  mrb_ary_push(mrb, res, 
+	       mrb_fixnum_value(result.pirep[irepno].cnt[iseqoff].num));
+  mrb_ary_push(mrb, res, 
+	       mrb_float_value(mrb, result.pirep[irepno].cnt[iseqoff].time));
+  
+  return res;
+}
+
 void
 mrb_mruby_profiler_gem_init(mrb_state* mrb) {
+  struct RObject *m;
+
   mrb_profiler_reallocinfo(mrb);
+  m = (struct RObject *)mrb_define_module(mrb, "Profiler");
   mrb->code_fetch_hook = prof_code_fetch_hook;
+  mrb_define_singleton_method(mrb, m, "get_prof_info",  
+			      mrb_mruby_profiler_get_prof_info, MRB_ARGS_REQ(2));
+  mrb_define_singleton_method(mrb, m, "irep_len", mrb_mruby_profiler_irep_len, MRB_ARGS_NONE());
+  mrb_define_singleton_method(mrb, m, "ilen", mrb_mruby_profiler_ilen, MRB_ARGS_REQ(1));
 }
 
 void
