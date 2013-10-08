@@ -22,15 +22,13 @@ module Profiler
         num = 0
         time = 0.0
         if infos[i + 1] then
+          num = infos[i + 1][0][2]
           infos[i + 1].each do |info|
-            num = info[2]
             time += info[3]
           end
-        else
-          num = 0
         end
 #        print(sprintf("%04d %10d %s", i, num, lin))
-        print(sprintf("%04d %10f %s", i, time, lin))
+        print(sprintf("%04d %4.5f %s", i, time, lin))
       end
     end
   end

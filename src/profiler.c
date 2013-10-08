@@ -56,6 +56,8 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
 {
   struct timeval tv;
   double curtime;
+  unsigned long ctimehi;
+  unsigned long ctimelo;
   
   int off;
 
@@ -67,8 +69,22 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
   if (irep->idx >= result.irep_len) {
     mrb_profiler_reallocinfo(mrb);
   }
+#ifdef __i386__
+  asm volatile ("rdtsc\n\t"
+		:
+		:
+		: "%eax", "%edx");
+  asm volatile ("mov %%eax, %0\n\t"
+		:"=r"(ctimelo));
+  asm volatile ("mov %%edx, %0\n\t"
+		:"=r"(ctimehi));
+  curtime = ((double)ctimehi) * 256.0;
+  curtime += ((double)ctimelo / (65536.0 * 256.0));
+#else
   gettimeofday(&tv, NULL);
   curtime = ((double)tv.tv_sec) + ((double)tv.tv_usec * 1e-6);
+#endif
+
   if (old_irep) {
     off = old_pc - old_irep->iseq;
     result.pirep[old_irep->idx].cnt[off].time += (curtime - old_time);
