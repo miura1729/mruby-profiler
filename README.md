@@ -26,5 +26,7 @@ mruby-profiler can customize format of result by mruby. mruby-profiler provides 
 # Author
 
  Miura Hideki (a plumber)
+
  @miura1729 (Twitter)
+
  d.hatena.ne.jp/miura1729
