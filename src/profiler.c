@@ -16,39 +16,55 @@ struct prof_counter {
 struct prof_irep {
   mrb_irep *irep;
   struct prof_counter *cnt;
+  int child_num;
+  int child_capa;
+  struct prof_irep **child;
+  struct prof_irep *parent;
 };
 
-struct prof_root {
-  int irep_len;
-  struct prof_irep *pirep;
+struct prof_result {
+  struct prof_irep *irep_root;
+  int irep_num;
+  int irep_capa;
+  struct prof_irep **irep_tab;
 };
 
-static struct prof_root result;
-static mrb_irep *old_irep = NULL;
+static struct prof_result result;
+static struct prof_irep *current_prof_irep = NULL;
 static mrb_code *old_pc = NULL;
 static double old_time = 0.0;
 static mrb_value prof_module;
 
-void
-mrb_profiler_reallocinfo(mrb_state* mrb)
+struct prof_irep *
+mrb_profiler_alloc_prof_irep(mrb_state* mrb, struct mrb_irep *irep, struct prof_irep *parent)
 {
   int i;
-  int j;
-  result.pirep = mrb_realloc(mrb, result.pirep, mrb->irep_len * sizeof(struct prof_irep));
+  struct prof_irep *new;
 
-  for (i = result.irep_len; i < mrb->irep_len; i++) {
-    static struct prof_irep *rirep;
-    mrb_irep *irep;
-
-    rirep = &result.pirep[i];
-    irep = rirep->irep = mrb->irep[i];
-    rirep->cnt = mrb_malloc(mrb, irep->ilen * sizeof(struct prof_counter));
-    for (j = 0; j < irep->ilen; j++) {
-      rirep->cnt[j].num = 0;
-      rirep->cnt[j].time = 0.0;
-    }
+  new = mrb_malloc(mrb, sizeof(struct prof_irep));
+  
+  new->parent = parent;
+  new->irep = irep;
+  irep->refcnt++;
+  new->cnt = mrb_malloc(mrb, irep->ilen * sizeof(struct prof_counter));
+  for (i = 0; i < irep->ilen; i++) {
+    new->cnt[i].num = 0;
+    new->cnt[i].time = 0.0;
   }
-  result.irep_len = mrb->irep_len;
+
+  new->child_num = 0;
+  new->child_capa = 4;
+  new->child = mrb_malloc(mrb, new->child_capa * sizeof(struct prof_irep *));
+
+  if (result.irep_capa <= result.irep_num) {
+    int size = result.irep_capa * 2;
+    result.irep_tab = mrb_realloc(mrb, result.irep_tab, size * sizeof(struct prof_irep *));
+    result.irep_capa = size;
+  }
+  result.irep_tab[result.irep_num] = new;
+  result.irep_num++;
+  
+  return new;
 }
 
 void
@@ -58,17 +74,15 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
   double curtime;
   unsigned long ctimehi;
   unsigned long ctimelo;
+  struct prof_irep *newirep;
   
   int off;
 
-  if (irep->idx == -1) {
+  if (irep->ilen == 1) {
     /* CALL ISEQ */
     return;
   }
 
-  if (irep->idx >= result.irep_len) {
-    mrb_profiler_reallocinfo(mrb);
-  }
 #ifdef __i386__
   asm volatile ("rdtsc\n\t"
 		:
@@ -85,22 +99,59 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
   curtime = ((double)tv.tv_sec) + ((double)tv.tv_usec * 1e-6);
 #endif
 
-  if (old_irep) {
-    off = old_pc - old_irep->iseq;
-    result.pirep[old_irep->idx].cnt[off].time += (curtime - old_time);
+  if (current_prof_irep) {
+    newirep = current_prof_irep;
+    if (current_prof_irep->irep != irep) {
+      int i;
+
+      for (i = 0; i < current_prof_irep->child_num; i++) {
+	if (current_prof_irep->child[i]->irep == irep) {
+	  newirep = current_prof_irep->child[i];
+	  goto finish;
+	}
+      }
+
+      for (newirep= current_prof_irep->parent; 
+	   newirep && newirep->irep != irep;
+	   newirep = newirep->parent);
+      if (newirep) {
+	goto finish;
+      }
+
+      if (current_prof_irep->child_capa <= current_prof_irep->child_num) {
+	struct prof_irep **tab;
+	int size = current_prof_irep->child_capa * 2;
+
+	current_prof_irep->child_capa = size;
+	tab = mrb_realloc(mrb, current_prof_irep->child, size * sizeof(struct prof_irep *));
+	current_prof_irep->child = tab;
+      }
+
+      newirep = mrb_profiler_alloc_prof_irep(mrb, irep, current_prof_irep);
+      current_prof_irep->child[current_prof_irep->child_num] = newirep;
+      current_prof_irep->child_num++;
+    }
   }
-  
-  off = pc - irep->iseq;
-  result.pirep[irep->idx].cnt[off].num++;
-  old_irep = irep;
+  else {
+    newirep = mrb_profiler_alloc_prof_irep(mrb, irep, NULL);
+    current_prof_irep = result.irep_root = newirep;
+    old_pc = irep->iseq;
+    old_time = curtime;
+  }
+
+ finish:
+  off = old_pc - current_prof_irep->irep->iseq;
+  current_prof_irep->cnt[off].time += (curtime - old_time);
+  current_prof_irep->cnt[off].num++;
   old_pc = pc;
   old_time = curtime;
+  current_prof_irep = newirep;
 }
 
 static mrb_value
 mrb_mruby_profiler_irep_len(mrb_state *mrb, mrb_value self)
 {
-  return mrb_fixnum_value(result.irep_len);
+  return mrb_fixnum_value(result.irep_num);
 }
 
 static mrb_value
@@ -109,7 +160,7 @@ mrb_mruby_profiler_ilen(mrb_state *mrb, mrb_value self)
   mrb_int irepno;
   mrb_get_args(mrb, "i", &irepno);
   
-  return mrb_fixnum_value(result.pirep[irepno].irep->ilen);
+  return mrb_fixnum_value(result.irep_tab[irepno]->irep->ilen);
 }
 
 static mrb_value
@@ -147,7 +198,7 @@ mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "ii", &irepno, &iseqoff);
 
   res = mrb_ary_new_capa(mrb, 5);
-  str = result.pirep[irepno].irep->filename;
+  str = result.irep_tab[irepno]->irep->filename;
   if (str) {
     mrb_ary_push(mrb, res, mrb_str_new(mrb, str, strlen(str)));
   }
@@ -155,18 +206,18 @@ mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
     mrb_ary_push(mrb, res, mrb_nil_value());
   }
 
-  if (result.pirep[irepno].irep->lines) {
+  if (result.irep_tab[irepno]->irep->lines) {
     mrb_ary_push(mrb, res, 
-		 mrb_fixnum_value(result.pirep[irepno].irep->lines[iseqoff]));
+		 mrb_fixnum_value(result.irep_tab[irepno]->irep->lines[iseqoff]));
   }
   else {
     mrb_ary_push(mrb, res, mrb_nil_value());
   }
 
   mrb_ary_push(mrb, res, 
-	       mrb_fixnum_value(result.pirep[irepno].cnt[iseqoff].num));
+	       mrb_fixnum_value(result.irep_tab[irepno]->cnt[iseqoff].num));
   mrb_ary_push(mrb, res, 
-	       mrb_float_value(mrb, result.pirep[irepno].cnt[iseqoff].time));
+	       mrb_float_value(mrb, result.irep_tab[irepno]->cnt[iseqoff].time));
   
   return res;
 }
@@ -175,7 +226,10 @@ void
 mrb_mruby_profiler_gem_init(mrb_state* mrb) {
   struct RObject *m;
 
-  mrb_profiler_reallocinfo(mrb);
+  result.irep_capa = 64;
+  result.irep_tab = mrb_realloc(mrb, result.irep_tab, result.irep_capa * sizeof(struct prof_irep *));
+  result.irep_num = 0;
+
   m = (struct RObject *)mrb_define_module(mrb, "Profiler");
   prof_module = mrb_obj_value(m);
   mrb->code_fetch_hook = prof_code_fetch_hook;
