@@ -22,13 +22,20 @@ module Profiler
         num = 0
         time = 0.0
         if infos[i + 1] then
-          num = infos[i + 1][0][2]
           infos[i + 1].each do |info|
             time += info[3]
+            if num < info[2] then
+              num = info[2]
+            end
           end
         end
 #        print(sprintf("%04d %10d %s", i, num, lin))
         print(sprintf("%04d %4.5f %s", i, time, lin))
+#        if num != 0 then
+#          print(sprintf("%04d %4.5f %s", i, time / num, lin))
+#        else
+#          print(sprintf("%04d %4.5f %s", i, 0.0, lin))
+#        end
       end
     end
   end
