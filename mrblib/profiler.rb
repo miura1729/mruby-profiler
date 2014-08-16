@@ -87,7 +87,7 @@ OPCODE = [
             code = val[1][0]
             num = val[1][1]
             time = val[1][2]
-            printf("            %-7.5f    #{OPCODE[code & 0x7f]} \n" , time)
+            printf("            %10d %-7.5f    #{OPCODE[code & 0x7f]} \n" , num, time)
           end
         end
       end

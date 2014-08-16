@@ -220,7 +220,7 @@ mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
 	       mrb_float_value(mrb, result.irep_tab[irepno]->cnt[iseqoff].time));
   
   /* Address */
-  mrb_ary_push(mrb, res, mrb_fixnum_value(iseqoff));
+  mrb_ary_push(mrb, res, mrb_fixnum_value(&result.irep_tab[irepno]->irep->iseq[iseqoff]));
   /* code   */
   mrb_ary_push(mrb, res, mrb_fixnum_value(result.irep_tab[irepno]->irep->iseq[iseqoff]));
 
