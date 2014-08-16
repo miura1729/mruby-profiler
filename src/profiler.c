@@ -197,7 +197,7 @@ mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
   const char *str;
   mrb_get_args(mrb, "ii", &irepno, &iseqoff);
 
-  res = mrb_ary_new_capa(mrb, 5);
+  res = mrb_ary_new_capa(mrb, 7);
   str = result.irep_tab[irepno]->irep->filename;
   if (str) {
     mrb_ary_push(mrb, res, mrb_str_new(mrb, str, strlen(str)));
@@ -219,6 +219,11 @@ mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
   mrb_ary_push(mrb, res, 
 	       mrb_float_value(mrb, result.irep_tab[irepno]->cnt[iseqoff].time));
   
+  /* Address */
+  mrb_ary_push(mrb, res, mrb_fixnum_value(iseqoff));
+  /* code   */
+  mrb_ary_push(mrb, res, mrb_fixnum_value(result.irep_tab[irepno]->irep->iseq[iseqoff]));
+
   return res;
 }
 

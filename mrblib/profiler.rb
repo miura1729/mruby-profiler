@@ -1,4 +1,36 @@
 module Profiler
+OPCODE = [
+  :NOP, :MOVE, :LOADL, :LOADI, :LOADSYM, :LOADNIL, :LOADSELF, :LOADT, :LOADF,
+  :GETGLOBAL, :SETGLOBAL, :GETSPECIAL, :SETSPECIAL,
+  :GETIV, :SETIV, :GETCV, :SETCV,
+  :GETCONST, :SETCONST, :GETMCNST, :SETMCNST, :GETUPVAR, :SETUPVAR,
+
+  :JMP, :JMPIF, :JMPNOT,
+  :ONERR, :RESCUE, :POPERR, :RAISE, :EPUSH, :EPOP,
+
+  :SEND, :SENDB, :FSEND, :CALL, :SUPER, :ARGARY, :ENTER, :KARG, :KDICT,
+
+  :RETURN, :TAILCALL, :BLKPUSH,
+
+  :ADD, :ADDI, :SUB, :SUBI, :MUL, :DIV,
+  :EQ, :LT, :LE, :GT, :GE,
+
+  :ARRAY, :ARYCAT, :ARYPUSH, :AREF, :ASET, :APOST,
+
+  :STRING, :STRCAT,
+
+  :HASH,
+  :LAMBDA,
+  :RANGE,
+
+  :OCLASS, :CLASS, :MODULE, :EXEC, :METHOD, :SCLASS,
+  :TCLASS,
+
+  :DEBUG, :STOP, :ERR,
+
+  :RSVD1, :RSVD2, :RSVD3, :RSVD4, :RSVD5,
+]
+
   def self.analyze
     files = {}
     ftab = {}
@@ -29,13 +61,35 @@ module Profiler
             end
           end
         end
+
+        #   Execute Count
 #        print(sprintf("%04d %10d %s", i, num, lin))
-        print(sprintf("%04d %4.5f %s", i, time, lin))
+
+        #   Execute Time
+        print(sprintf("%04d %7.5f %s", i, time, lin))
+
+        #   Execute Time per 1 instruction
 #        if num != 0 then
 #          print(sprintf("%04d %4.5f %s", i, time / num, lin))
 #        else
 #          print(sprintf("%04d %4.5f %s", i, 0.0, lin))
 #        end
+        if infos[i + 1] then
+          codes = {}
+          infos[i + 1].each do |info|
+            codes[info[4]] ||= [nil, 0, 0.0]
+            codes[info[4]][0] = info[5]
+            codes[info[4]][1] += info[2]
+            codes[info[4]][2] += info[3]
+          end
+
+          codes.each do |val|
+            code = val[1][0]
+            num = val[1][1]
+            time = val[1][2]
+            printf("            %-7.5f    #{OPCODE[code & 0x7f]} \n" , time)
+          end
+        end
       end
     end
   end
