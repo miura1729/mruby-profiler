@@ -2,6 +2,8 @@
 #include "mruby.h"
 #include "mruby/irep.h"
 #include "mruby/array.h"
+#include "mruby/class.h"
+#include "mruby/value.h"
 #include <time.h>
 #include <sys/time.h>
 #include <stdlib.h>
@@ -15,6 +17,8 @@ struct prof_counter {
 
 struct prof_irep {
   mrb_irep *irep;
+  mrb_sym mname;
+  mrb_value klass;
   struct prof_counter *cnt;
   int child_num;
   int child_capa;
@@ -45,6 +49,8 @@ mrb_profiler_alloc_prof_irep(mrb_state* mrb, struct mrb_irep *irep, struct prof_
   
   new->parent = parent;
   new->irep = irep;
+  new->mname = mrb->c->ci->mid;
+  new->klass = mrb_obj_value(mrb_class(mrb, mrb->c->stack[0]));
   irep->refcnt++;
   new->cnt = mrb_malloc(mrb, irep->ilen * sizeof(struct prof_counter));
   for (i = 0; i < irep->ilen; i++) {
@@ -67,23 +73,15 @@ mrb_profiler_alloc_prof_irep(mrb_state* mrb, struct mrb_irep *irep, struct prof_
   return new;
 }
 
-void
-prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc, mrb_value *regs)
+static inline double
+prof_curtime()
 {
-  struct timeval tv;
   double curtime;
-  unsigned long ctimehi;
-  unsigned long ctimelo;
-  struct prof_irep *newirep;
-  
-  int off;
-
-  if (irep->ilen == 1) {
-    /* CALL ISEQ */
-    return;
-  }
 
 #ifdef __i386__
+  unsigned long ctimehi;
+  unsigned long ctimelo;
+
   asm volatile ("rdtsc\n\t"
 		:
 		:
@@ -95,9 +93,29 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
   curtime = ((double)ctimehi) * 256.0;
   curtime += ((double)ctimelo / (65536.0 * 256.0));
 #else
+  struct timeval tv;
+
   gettimeofday(&tv, NULL);
   curtime = ((double)tv.tv_sec) + ((double)tv.tv_usec * 1e-6);
 #endif
+
+  return curtime;
+}
+
+void
+prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc, mrb_value *regs)
+{
+  double curtime;
+  struct prof_irep *newirep;
+  
+  int off;
+
+  curtime = prof_curtime();
+
+  if (irep->ilen == 1) {
+    /* CALL ISEQ */
+    return;
+  }
 
   if (current_prof_irep) {
     newirep = current_prof_irep;
@@ -144,8 +162,8 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
   current_prof_irep->cnt[off].time += (curtime - old_time);
   current_prof_irep->cnt[off].num++;
   old_pc = pc;
-  old_time = curtime;
   current_prof_irep = newirep;
+  old_time = prof_curtime();
 }
 
 static mrb_value
@@ -198,14 +216,20 @@ mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "ii", &irepno, &iseqoff);
 
   res = mrb_ary_new_capa(mrb, 7);
+  /* 0 fine name or method name */
   str = result.irep_tab[irepno]->irep->filename;
   if (str) {
     mrb_ary_push(mrb, res, mrb_str_new(mrb, str, strlen(str)));
   }
   else {
-    mrb_ary_push(mrb, res, mrb_nil_value());
+    mrb_value cls_mname = mrb_ary_new_capa(mrb, 2);
+    mrb_ary_push(mrb, cls_mname, result.irep_tab[irepno]->klass);
+    mrb_ary_push(mrb, cls_mname, mrb_symbol_value(result.irep_tab[irepno]->mname));
+
+    mrb_ary_push(mrb, res, cls_mname);
   }
 
+  /* 1 Line no */
   if (result.irep_tab[irepno]->irep->lines) {
     mrb_ary_push(mrb, res, 
 		 mrb_fixnum_value(result.irep_tab[irepno]->irep->lines[iseqoff]));
@@ -214,14 +238,16 @@ mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
     mrb_ary_push(mrb, res, mrb_nil_value());
   }
 
+  /* 2 Execution Count */
   mrb_ary_push(mrb, res, 
 	       mrb_fixnum_value(result.irep_tab[irepno]->cnt[iseqoff].num));
+  /* 3 Execution Time */
   mrb_ary_push(mrb, res, 
 	       mrb_float_value(mrb, result.irep_tab[irepno]->cnt[iseqoff].time));
   
-  /* Address */
-  mrb_ary_push(mrb, res, mrb_fixnum_value(&result.irep_tab[irepno]->irep->iseq[iseqoff]));
-  /* code   */
+  /* 4 Address */
+  mrb_ary_push(mrb, res, mrb_fixnum_value((mrb_int)&result.irep_tab[irepno]->irep->iseq[iseqoff]));
+  /* 5 code   */
   mrb_ary_push(mrb, res, mrb_fixnum_value(result.irep_tab[irepno]->irep->iseq[iseqoff]));
 
   return res;

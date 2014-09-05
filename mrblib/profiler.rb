@@ -33,10 +33,11 @@ OPCODE = [
 
   def self.analyze
     files = {}
+    nosrc = {}
     ftab = {}
     irep_len.times do |ino|
       fn = get_prof_info(ino, 0)[0]
-      if fn then
+      if fn.is_a?(String) then
         files[fn] ||= {}
         ilen(ino).times do |ioff|
           info = get_prof_info(ino, ioff)
@@ -44,6 +45,14 @@ OPCODE = [
             files[fn][info[1]] ||= []
             files[fn][info[1]].push info
           end
+        end
+      else
+        p fn
+        mname = "#{fn[0]}##{fn[1]}"
+        ilen(ino).times do |ioff|
+          info = get_prof_info(ino, ioff)
+          nosrc[mname] ||= []
+          nosrc[mname].push info
         end
       end
     end
@@ -90,6 +99,24 @@ OPCODE = [
             printf("            %10d %-7.5f    #{OPCODE[code & 0x7f]} \n" , num, time)
           end
         end
+      end
+    end
+
+    nosrc.each do |mn, infos|
+      codes = {}
+      infos.each do |info|
+        codes[info[4]] ||= [nil, 0, 0.0]
+        codes[info[4]][0] = info[5]
+        codes[info[4]][1] += info[2]
+        codes[info[4]][2] += info[3]
+      end
+ 
+      print("#{mn} \n")
+      codes.each do |val|
+        code = val[1][0]
+        num = val[1][1]
+        time = val[1][2]
+        printf("            %10d %-7.5f    #{OPCODE[code & 0x7f]} \n" , num, time)
       end
     end
   end
