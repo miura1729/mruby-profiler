@@ -47,7 +47,6 @@ OPCODE = [
           end
         end
       else
-        p fn
         mname = "#{fn[0]}##{fn[1]}"
         ilen(ino).times do |ioff|
           info = get_prof_info(ino, ioff)
