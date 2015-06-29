@@ -1,36 +1,4 @@
 module Profiler
-OPCODE = [
-  :NOP, :MOVE, :LOADL, :LOADI, :LOADSYM, :LOADNIL, :LOADSELF, :LOADT, :LOADF,
-  :GETGLOBAL, :SETGLOBAL, :GETSPECIAL, :SETSPECIAL,
-  :GETIV, :SETIV, :GETCV, :SETCV,
-  :GETCONST, :SETCONST, :GETMCNST, :SETMCNST, :GETUPVAR, :SETUPVAR,
-
-  :JMP, :JMPIF, :JMPNOT,
-  :ONERR, :RESCUE, :POPERR, :RAISE, :EPUSH, :EPOP,
-
-  :SEND, :SENDB, :FSEND, :CALL, :SUPER, :ARGARY, :ENTER, :KARG, :KDICT,
-
-  :RETURN, :TAILCALL, :BLKPUSH,
-
-  :ADD, :ADDI, :SUB, :SUBI, :MUL, :DIV,
-  :EQ, :LT, :LE, :GT, :GE,
-
-  :ARRAY, :ARYCAT, :ARYPUSH, :AREF, :ASET, :APOST,
-
-  :STRING, :STRCAT,
-
-  :HASH,
-  :LAMBDA,
-  :RANGE,
-
-  :OCLASS, :CLASS, :MODULE, :EXEC, :METHOD, :SCLASS,
-  :TCLASS,
-
-  :DEBUG, :STOP, :ERR,
-
-  :RSVD1, :RSVD2, :RSVD3, :RSVD4, :RSVD5,
-]
-
   def self.analyze
     files = {}
     nosrc = {}
@@ -95,7 +63,7 @@ OPCODE = [
             code = val[1][0]
             num = val[1][1]
             time = val[1][2]
-            printf("            %10d %-7.5f    #{OPCODE[code & 0x7f]} \n" , num, time)
+            printf("            %10d %-7.5f    %s \n" , num, time, code)
           end
         end
       end
@@ -115,7 +83,7 @@ OPCODE = [
         code = val[1][0]
         num = val[1][1]
         time = val[1][2]
-        printf("            %10d %-7.5f    #{OPCODE[code & 0x7f]} \n" , num, time)
+        printf("            %10d %-7.5f    %s \n" , num, time, code)
       end
     end
   end
