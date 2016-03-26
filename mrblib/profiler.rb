@@ -1,5 +1,26 @@
 module Profiler
   def self.analyze
+    if ARGV[0] == "-k" then
+      analyze_kcached
+    else
+      analyze_normal
+    end
+  end
+
+  def self.analyze_kcached
+    irep_num.times do |ino|
+      insir = get_irep_info(ino)
+      print("fl=#{insir[3]}\n")
+      print("fn=#{insir[1]}##{insir[2]}\n")
+
+      ilen(ino).times do |ioff|
+        insin = get_inst_info(ino, ioff)
+        print("+#{ioff} #{insin[1]} #{insin[3]} \n")
+      end
+    end
+  end
+
+  def self.analyze_normal
     files = {}
     nosrc = {}
     ftab = {}
@@ -77,7 +98,7 @@ module Profiler
         codes[info[4]][1] += info[2]
         codes[info[4]][2] += info[3]
       end
- 
+
       print("#{mn} \n")
       codes.each do |val|
         code = val[1][0]

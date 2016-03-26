@@ -625,7 +625,7 @@ mrb_mruby_profiler_get_inst_info(mrb_state *mrb, mrb_value self)
 #define IREP_ID(prof) (mrb_fixnum_value((mrb_int)((prof)->irep)))
 
 static mrb_value
-mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
+mrb_mruby_profiler_get_irep_info(mrb_state *mrb, mrb_value self)
 {
   mrb_int irepno;
   struct prof_irep *profi;
@@ -640,15 +640,28 @@ mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
   /* 0 id of irep */
   mrb_ary_push(mrb, res, IREP_ID(profi));
 
+  /* 1 Class of method */
+  mrb_ary_push(mrb, res, profi->klass);
 
-  /* 1 Childs */
+  /* 2 method name */
+  mrb_ary_push(mrb, res, mrb_symbol_value(profi->mname));
+
+  /* 3 file name */
+  if (profi->irep->filename) {
+    mrb_ary_push(mrb, res, mrb_str_new(mrb, profi->irep->filename, strlen(profi->irep->filename)));
+  }
+  else {
+    mrb_ary_push(mrb, res, mrb_nil_value());
+  }
+
+  /* 4 Childs */
   ary = mrb_ary_new_capa(mrb, profi->child_num);
   for (i = 0; i < profi->child_num; i++) {
     mrb_ary_push(mrb, ary, IREP_ID(profi->child[i]));
   }
   mrb_ary_push(mrb, res, ary);
 
-  /* 2 Call num to Childs */
+  /* 5 Call num to Childs */
   ary = mrb_ary_new_capa(mrb, profi->child_num);
   for (i = 0; i < profi->child_num; i++) {
     mrb_ary_push(mrb, ary, mrb_fixnum_value(profi->ccall_num[i]));
@@ -671,8 +684,8 @@ mrb_mruby_profiler_gem_init(mrb_state* mrb) {
   mrb->code_fetch_hook = prof_code_fetch_hook;
   mrb_define_singleton_method(mrb, m, "get_inst_info",  
 			      mrb_mruby_profiler_get_inst_info, MRB_ARGS_REQ(2));
-  mrb_define_singleton_method(mrb, m, "get_prof_info",  
-			      mrb_mruby_profiler_get_prof_info, MRB_ARGS_REQ(1));
+  mrb_define_singleton_method(mrb, m, "get_irep_info",  
+			      mrb_mruby_profiler_get_irep_info, MRB_ARGS_REQ(1));
   mrb_define_singleton_method(mrb, m, "irep_num", mrb_mruby_profiler_irep_num, MRB_ARGS_NONE());
   mrb_define_singleton_method(mrb, m, "ilen", mrb_mruby_profiler_ilen, MRB_ARGS_REQ(1));
   mrb_define_singleton_method(mrb, m, "read", mrb_mruby_profiler_read, MRB_ARGS_REQ(1));
