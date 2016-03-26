@@ -8,10 +8,15 @@ module Profiler
   end
 
   def self.analyze_kcached
+    ireps = {}
+    irep_num.times do |ino|
+      ireps[get_irep_info(ino)[0]] = ino
+    end
+
     irep_num.times do |ino|
       insir = get_irep_info(ino)
       print("fl=#{insir[3]}\n")
-      print("fn=(#{insir[0]}) #{insir[1]}##{insir[2]}\n")
+      print("fn=#{insir[1]}##{insir[2]}\n")
 
       ilen(ino).times do |ioff|
         insin = get_inst_info(ino, ioff)
@@ -21,7 +26,8 @@ module Profiler
       childs = insir[4]
       ccalls = insir[5]
       childs.size.times do |cno|
-        print("cfn=(#{childs[cno]})\n")
+        irep = get_irep_info(ireps[childs[cno]])
+        print("cfn=#{irep[1]}##{irep[2]}\n")
         print("calls=#{ccalls[cno]}\n")
       end
     end
