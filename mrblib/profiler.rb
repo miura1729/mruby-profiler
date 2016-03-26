@@ -3,12 +3,12 @@ module Profiler
     files = {}
     nosrc = {}
     ftab = {}
-    irep_len.times do |ino|
-      fn = get_prof_info(ino, 0)[0]
+    irep_num.times do |ino|
+      fn = get_inst_info(ino, 0)[0]
       if fn.is_a?(String) then
         files[fn] ||= {}
         ilen(ino).times do |ioff|
-          info = get_prof_info(ino, ioff)
+          info = get_inst_info(ino, ioff)
           if info[1] then
             files[fn][info[1]] ||= []
             files[fn][info[1]].push info
@@ -17,7 +17,7 @@ module Profiler
       else
         mname = "#{fn[0]}##{fn[1]}"
         ilen(ino).times do |ioff|
-          info = get_prof_info(ino, ioff)
+          info = get_inst_info(ino, ioff)
           nosrc[mname] ||= []
           nosrc[mname].push info
         end

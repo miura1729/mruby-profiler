@@ -26,6 +26,7 @@ struct prof_irep {
   int child_num;
   int child_capa;
   struct prof_irep **child;
+  int *ccall_num;
   struct prof_irep *parent;
 };
 
@@ -64,6 +65,7 @@ mrb_profiler_alloc_prof_irep(mrb_state* mrb, struct mrb_irep *irep, struct prof_
   new->child_num = 0;
   new->child_capa = 4;
   new->child = mrb_malloc(mrb, new->child_capa * sizeof(struct prof_irep *));
+  new->ccall_num = mrb_malloc(mrb, new->child_capa * sizeof(int));
 
   if (result.irep_capa <= result.irep_num) {
     int size = result.irep_capa * 2;
@@ -127,6 +129,7 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
 
       for (i = 0; i < current_prof_irep->child_num; i++) {
 	if (current_prof_irep->child[i]->irep == irep) {
+	  current_prof_irep->ccall_num[i]++;
 	  newirep = current_prof_irep->child[i];
 	  goto finish;
 	}
@@ -141,15 +144,20 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
 
       if (current_prof_irep->child_capa <= current_prof_irep->child_num) {
 	struct prof_irep **tab;
+	int *ccall;
 	int size = current_prof_irep->child_capa * 2;
 
 	current_prof_irep->child_capa = size;
 	tab = mrb_realloc(mrb, current_prof_irep->child, size * sizeof(struct prof_irep *));
 	current_prof_irep->child = tab;
+	ccall = mrb_realloc(mrb, current_prof_irep->ccall_num, size * sizeof(int));
+	current_prof_irep->ccall_num = ccall;
       }
 
       newirep = mrb_profiler_alloc_prof_irep(mrb, irep, current_prof_irep);
-      current_prof_irep->child[current_prof_irep->child_num] = newirep;
+      off = current_prof_irep->child_num;
+      current_prof_irep->child[off] = newirep;
+      current_prof_irep->ccall_num[off] = 1;
       current_prof_irep->child_num++;
     }
   }
@@ -170,7 +178,7 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
 }
 
 static mrb_value
-mrb_mruby_profiler_irep_len(mrb_state *mrb, mrb_value self)
+mrb_mruby_profiler_irep_num(mrb_state *mrb, mrb_value self)
 {
   return mrb_fixnum_value(result.irep_num);
 }
@@ -567,7 +575,7 @@ mrb_mruby_profiler_disasm_once(mrb_state *mrb, mrb_irep *irep, mrb_code c)
 }
 
 static mrb_value
-mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
+mrb_mruby_profiler_get_inst_info(mrb_state *mrb, mrb_value self)
 {
   mrb_int irepno;
   mrb_int iseqoff;
@@ -614,6 +622,42 @@ mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
   return res;
 }
 
+#define IREP_ID(prof) (mrb_fixnum_value((mrb_int)((prof)->irep)))
+
+static mrb_value
+mrb_mruby_profiler_get_prof_info(mrb_state *mrb, mrb_value self)
+{
+  mrb_int irepno;
+  struct prof_irep *profi;
+  mrb_value res;
+  mrb_value ary;
+  int i;
+
+  mrb_get_args(mrb, "i", &irepno);
+
+  res = mrb_ary_new_capa(mrb, 3);
+  profi = result.irep_tab[irepno];
+  /* 0 id of irep */
+  mrb_ary_push(mrb, res, IREP_ID(profi));
+
+
+  /* 1 Childs */
+  ary = mrb_ary_new_capa(mrb, profi->child_num);
+  for (i = 0; i < profi->child_num; i++) {
+    mrb_ary_push(mrb, ary, IREP_ID(profi->child[i]));
+  }
+  mrb_ary_push(mrb, res, ary);
+
+  /* 2 Call num to Childs */
+  ary = mrb_ary_new_capa(mrb, profi->child_num);
+  for (i = 0; i < profi->child_num; i++) {
+    mrb_ary_push(mrb, ary, mrb_fixnum_value(profi->ccall_num[i]));
+  }
+  mrb_ary_push(mrb, res, ary);
+
+  return res;
+}
+
 void
 mrb_mruby_profiler_gem_init(mrb_state* mrb) {
   struct RObject *m;
@@ -625,9 +669,11 @@ mrb_mruby_profiler_gem_init(mrb_state* mrb) {
   m = (struct RObject *)mrb_define_module(mrb, "Profiler");
   prof_module = mrb_obj_value(m);
   mrb->code_fetch_hook = prof_code_fetch_hook;
+  mrb_define_singleton_method(mrb, m, "get_inst_info",  
+			      mrb_mruby_profiler_get_inst_info, MRB_ARGS_REQ(2));
   mrb_define_singleton_method(mrb, m, "get_prof_info",  
-			      mrb_mruby_profiler_get_prof_info, MRB_ARGS_REQ(2));
-  mrb_define_singleton_method(mrb, m, "irep_len", mrb_mruby_profiler_irep_len, MRB_ARGS_NONE());
+			      mrb_mruby_profiler_get_prof_info, MRB_ARGS_REQ(1));
+  mrb_define_singleton_method(mrb, m, "irep_num", mrb_mruby_profiler_irep_num, MRB_ARGS_NONE());
   mrb_define_singleton_method(mrb, m, "ilen", mrb_mruby_profiler_ilen, MRB_ARGS_REQ(1));
   mrb_define_singleton_method(mrb, m, "read", mrb_mruby_profiler_read, MRB_ARGS_REQ(1));
 }
