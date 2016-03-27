@@ -23,8 +23,8 @@ module Profiler
     irep_num.times do |ino|
       insir = get_irep_info(ino)
       irepno = ireps[insir[0]]
-      print("fl=#{insir[3]}\n") if insir[3]
-      print("fn=#{insir[1]}##{insir[2]}\n")
+      print("fl=(#{irepno})#{insir[3]}\n") if insir[3]
+      print("fn=(#{irepno})#{insir[1]}##{insir[2]}\n")
 
       ilen(ino).times do |ioff|
         insin = get_inst_info(ino, ioff)
@@ -36,9 +36,9 @@ module Profiler
       childs.size.times do |cno|
         irepno = ireps[childs[cno]]
         irep = get_irep_info(irepno)
-        print("cfl=(#{irepno}) #{irep[3]}##{irep[2]}\n") if irep[3]
+        print("cfl=(#{irepno}) #{irep[3]}\n") if irep[3]
         print("cfn=(#{irepno}) #{irep[1]}##{irep[2]}\n")
-        print("calls=#{ccalls[cno]} + 1\n")
+        print("calls=#{ccalls[cno]} +1\n")
         print("#{irep[0]} 1000\n")
       end
     end
