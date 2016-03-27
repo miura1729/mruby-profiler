@@ -9,26 +9,37 @@ module Profiler
 
   def self.analyze_kcached
     ireps = {}
+    print("version: 1\n")
+    print("positions: address\n")
+    print("events: ticks\n")
+
     irep_num.times do |ino|
-      ireps[get_irep_info(ino)[0]] = ino
+      insir = get_irep_info(ino)
+      ireps[insir[0]] = ino
+      print("fl=(#{ino}) #{insir[3]}\n") if insir[3]
+      print("fn=(#{ino}) #{insir[1]}##{insir[2]}\n")
     end
 
     irep_num.times do |ino|
       insir = get_irep_info(ino)
-      print("fl=#{insir[3]}\n")
+      irepno = ireps[insir[0]]
+      print("fl=#{insir[3]}\n") if insir[3]
       print("fn=#{insir[1]}##{insir[2]}\n")
 
       ilen(ino).times do |ioff|
         insin = get_inst_info(ino, ioff)
-        print("+#{ioff} #{insin[1]} #{(insin[3] * 10000000).to_i} #{insin[2]}\n")
+        print("0x#{insir[0]} #{insin[1]} #{(insin[3] * 10000000).to_i}\n")
       end
 
       childs = insir[4]
       ccalls = insir[5]
       childs.size.times do |cno|
-        irep = get_irep_info(ireps[childs[cno]])
-        print("cfn=#{irep[1]}##{irep[2]}\n")
-        print("calls=#{ccalls[cno]}\n")
+        irepno = ireps[childs[cno]]
+        irep = get_irep_info(irepno)
+        print("cfl=(#{irepno}) #{irep[3]}##{irep[2]}\n") if irep[3]
+        print("cfn=(#{irepno}) #{irep[1]}##{irep[2]}\n")
+        print("calls=#{ccalls[cno]} + 1\n")
+        print("#{irep[0]} 1000\n")
       end
     end
   end
