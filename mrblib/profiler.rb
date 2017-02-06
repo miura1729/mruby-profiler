@@ -85,22 +85,33 @@ module Profiler
     files = {}
     #Methods without corresponding source
     nosrc = {}
-    ftab = {}
+
+    #Time spent in individual instructions
+    #Used in summary
+    itimes = []
+
+    #Map method/instruction level info to:
+    # - file+line                    OR
+    # - method+instruction offset
+    total_time = 0.0
     irep_num.times do |ino|
       fn = get_inst_info(ino, 0)[0]
       if fn.is_a?(String) then
         files[fn] ||= {}
         ilen(ino).times do |ioff|
-          info = get_inst_info(ino, ioff)
-          if info[1] then
-            files[fn][info[1]] ||= []
-            files[fn][info[1]].push info
+          info   = get_inst_info(ino, ioff)
+          total_time += info[3]
+          lineno = info[1]
+          if lineno then
+            files[fn][lineno] ||= []
+            files[fn][lineno].push info
           end
         end
       else
         mname = "#{fn[0]}##{fn[1]}"
         ilen(ino).times do |ioff|
           info = get_inst_info(ino, ioff)
+          total_time += info[3]
           nosrc[mname] ||= []
           nosrc[mname].push info
         end
@@ -149,6 +160,7 @@ module Profiler
             num = val[1][1]
             time = val[1][2]
             printf("            %10d %-7.5f    %s \n" , num, time, code)
+            itimes << time if time > 1e-6
           end
         end
       end
@@ -157,19 +169,45 @@ module Profiler
     #Dump stats for lines without any source level information
     nosrc.each do |mn, infos|
       codes = {}
+      method_time = 0.0
       infos.each do |info|
         codes[info[4]] ||= [nil, 0, 0.0]
         codes[info[4]][0] = info[5]
         codes[info[4]][1] += info[2]
         codes[info[4]][2] += info[3]
+        method_time += info[3]
       end
 
-      print("#{mn} \n")
+      printf("%s %-7.5f\n", mn, method_time)
       codes.each do |val|
         code = val[1][0]
-        num = val[1][1]
+        num  = val[1][1]
         time = val[1][2]
         printf("            %10d %-7.5f    %s \n" , num, time, code)
+        itimes << time if time > 1e-6
+      end
+    end
+    print("Total recorded time = #{total_time} seconds\n")
+    begin
+      itimes = itimes.sort.reverse
+      pr50   = total_time*0.50
+      pr90   = total_time*0.90
+      pr95   = total_time*0.95
+      cum    = 0.0
+      itimes.each_with_index do |t, idx|
+        cum += t
+        if(cum > pr50)
+          print("50% of execution in #{idx+1} VM instructions (above #{t*1000} ms each)\n")
+          pr50 = total_time
+        end
+        if(cum > pr90)
+          print("90% of execution in #{idx+1} VM instructions (above #{t*1000} ms each)\n")
+          pr90 = total_time
+        end
+        if(cum > pr95)
+          print("95% of execution in #{idx+1} VM instructions (above #{t*1000} ms each)\n")
+          break
+        end
       end
     end
   end
