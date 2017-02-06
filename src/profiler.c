@@ -50,7 +50,7 @@ mrb_profiler_alloc_prof_irep(mrb_state* mrb, struct mrb_irep *irep, struct prof_
   struct prof_irep *new;
 
   new = mrb_malloc(mrb, sizeof(struct prof_irep));
-  
+
   new->parent = parent;
   new->irep = irep;
   new->mname = mrb->c->ci->mid;
@@ -74,7 +74,7 @@ mrb_profiler_alloc_prof_irep(mrb_state* mrb, struct mrb_irep *irep, struct prof_
   }
   result.irep_tab[result.irep_num] = new;
   result.irep_num++;
-  
+
   return new;
 }
 
@@ -112,7 +112,7 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
 {
   double curtime;
   struct prof_irep *newirep;
-  
+
   int off;
 
   curtime = prof_curtime();
@@ -135,7 +135,7 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
   }
       }
 
-      for (newirep= current_prof_irep->parent; 
+      for (newirep= current_prof_irep->parent;
      newirep && newirep->irep != irep;
      newirep = newirep->parent);
       if (newirep) {
@@ -188,7 +188,7 @@ mrb_mruby_profiler_ilen(mrb_state *mrb, mrb_value self)
 {
   mrb_int irepno;
   mrb_get_args(mrb, "i", &irepno);
-  
+
   return mrb_fixnum_value(result.irep_tab[irepno]->irep->ilen);
 }
 
@@ -209,7 +209,7 @@ mrb_mruby_profiler_read(mrb_state *mrb, mrb_value self)
   while (fgets(buf, 255, fp)) {
     int ai = mrb_gc_arena_save(mrb);
     mrb_value ele = mrb_str_new(mrb, buf, strlen(buf));
-    
+
     mrb_ary_push(mrb, res, ele);
     mrb_gc_arena_restore(mrb, ai);
   }
@@ -599,7 +599,7 @@ mrb_mruby_profiler_get_inst_info(mrb_state *mrb, mrb_value self)
 
   /* 1 Line no */
   if (result.irep_tab[irepno]->irep->lines) {
-    mrb_ary_push(mrb, res, 
+    mrb_ary_push(mrb, res,
      mrb_fixnum_value(result.irep_tab[irepno]->irep->lines[iseqoff]));
   }
   else {
@@ -607,12 +607,12 @@ mrb_mruby_profiler_get_inst_info(mrb_state *mrb, mrb_value self)
   }
 
   /* 2 Execution Count */
-  mrb_ary_push(mrb, res, 
+  mrb_ary_push(mrb, res,
          mrb_fixnum_value(result.irep_tab[irepno]->cnt[iseqoff].num));
   /* 3 Execution Time */
-  mrb_ary_push(mrb, res, 
+  mrb_ary_push(mrb, res,
          mrb_float_value(mrb, result.irep_tab[irepno]->cnt[iseqoff].time));
-  
+
   /* 4 Address */
   mrb_ary_push(mrb, res, mrb_fixnum_value((mrb_int)&result.irep_tab[irepno]->irep->iseq[iseqoff]));
   /* 5 code   */
@@ -682,9 +682,9 @@ mrb_mruby_profiler_gem_init(mrb_state* mrb) {
   m = (struct RObject *)mrb_define_module(mrb, "Profiler");
   prof_module = mrb_obj_value(m);
   mrb->code_fetch_hook = prof_code_fetch_hook;
-  mrb_define_singleton_method(mrb, m, "get_inst_info",  
+  mrb_define_singleton_method(mrb, m, "get_inst_info",
             mrb_mruby_profiler_get_inst_info, MRB_ARGS_REQ(2));
-  mrb_define_singleton_method(mrb, m, "get_irep_info",  
+  mrb_define_singleton_method(mrb, m, "get_irep_info",
             mrb_mruby_profiler_get_irep_info, MRB_ARGS_REQ(1));
   mrb_define_singleton_method(mrb, m, "irep_num", mrb_mruby_profiler_irep_num, MRB_ARGS_NONE());
   mrb_define_singleton_method(mrb, m, "ilen", mrb_mruby_profiler_ilen, MRB_ARGS_REQ(1));
