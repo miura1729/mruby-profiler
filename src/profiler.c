@@ -14,37 +14,52 @@
 #include <string.h>
 
 struct prof_counter {
-  double time;
-  uint32_t num;
+  double time;  //Total execution time in seconds
+  uint32_t num; //Total number of executions
 };
 
 struct prof_irep {
-  mrb_irep *irep;
-  mrb_sym mname;
-  mrb_value klass;
-  struct prof_counter *cnt;
-  int child_num;
-  int child_capa;
-  struct prof_irep **child;
-  int *ccall_num;
+  mrb_irep *irep;           //VM instructions
+  mrb_sym name;        //Method name
+  mrb_value klass;        //Class implementing method
+  struct prof_counter *cnt; //Profiler results
+
+  int child_num;            //Number of called methods
+  int child_capa;           //Child array capacity
+  struct prof_irep **child; //Children VM instructions/methods [child_num elements]
+
+  int *ccall_num;           //Number of calls to each child [child_num elements]
   struct prof_irep *parent;
 };
 
 struct prof_result {
-  struct prof_irep *irep_root;
-  int irep_num;
-  int irep_capa;
-  struct prof_irep **irep_tab;
+  struct prof_irep *irep_root; //First irep profiled
+  int irep_num;                //Number of ireps profiled
+  int irep_capa;               //Capacity of irep array
+  struct prof_irep **irep_tab; //Profiler results, one irep each
 };
 
+//Profiling results
 static struct prof_result result;
+//Current method
 static struct prof_irep *current_prof_irep = NULL;
+//Last profiled instruction
 static mrb_code *old_pc = NULL;
+//Time that last instruction was fetched at
 static double old_time = 0.0;
+//Profiler module
 static mrb_value prof_module;
 
+//Allocate a new set of profiler metadata for a new method's irep
+//
+//Arguments:
+// - mrb:    Mruby state
+// - irep:   Method irep
+// - parent: Calling method
 struct prof_irep *
-mrb_profiler_alloc_prof_irep(mrb_state* mrb, struct mrb_irep *irep, struct prof_irep *parent)
+mrb_profiler_alloc_prof_irep(mrb_state* mrb,
+                             struct mrb_irep *irep,
+                             struct prof_irep *parent)
 {
   int i;
   struct prof_irep *new;
@@ -56,20 +71,27 @@ mrb_profiler_alloc_prof_irep(mrb_state* mrb, struct mrb_irep *irep, struct prof_
   new->mname = mrb->c->ci->mid;
   new->klass = mrb_obj_value(mrb_class(mrb, mrb->c->stack[0]));
   irep->refcnt++;
-  new->cnt = mrb_malloc(mrb, irep->ilen * sizeof(struct prof_counter));
+
+  //Allocate per instruction counters
+  new->cnt = (struct prof_counter*)
+      mrb_malloc(mrb, irep->ilen * sizeof(struct prof_counter));
   for (i = 0; i < irep->ilen; i++) {
     new->cnt[i].num = 0;
     new->cnt[i].time = 0.0;
   }
 
+  //Preallocate child array
   new->child_num = 0;
   new->child_capa = 4;
-  new->child = mrb_malloc(mrb, new->child_capa * sizeof(struct prof_irep *));
-  new->ccall_num = mrb_malloc(mrb, new->child_capa * sizeof(int));
+  new->child = (struct prof_irep**)
+      mrb_malloc(mrb, new->child_capa * sizeof(struct prof_irep *));
+  new->ccall_num = (int*)mrb_malloc(mrb, new->child_capa * sizeof(int));
 
+  //Add to the global profiler results
   if (result.irep_capa <= result.irep_num) {
     int size = result.irep_capa * 2;
-    result.irep_tab = mrb_realloc(mrb, result.irep_tab, size * sizeof(struct prof_irep *));
+    result.irep_tab = (struct prof_irep**)
+        mrb_realloc(mrb, result.irep_tab, size * sizeof(struct prof_irep *));
     result.irep_capa = size;
   }
   result.irep_tab[result.irep_num] = new;
@@ -78,6 +100,7 @@ mrb_profiler_alloc_prof_irep(mrb_state* mrb, struct mrb_irep *irep, struct prof_
   return new;
 }
 
+//Get current time in seconds
 static inline double
 prof_curtime()
 {
@@ -107,13 +130,26 @@ prof_curtime()
   return curtime;
 }
 
+//VM Execution Hook
+//
+//This function is called before the VM executes each instruction
+//
+//Arguments:
+// - mrb: mruby state
+// - irep: current instruction context
+// - pc:   current VM instruction
+// - regs: current VM registers (unused)
 void
-prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc, mrb_value *regs)
+prof_code_fetch_hook(struct mrb_state *mrb,
+                     struct mrb_irep *irep,
+                     mrb_code *pc,
+                     mrb_value *regs)
 {
   double curtime;
   struct prof_irep *newirep;
 
   int off;
+  (void) regs;
 
   curtime = prof_curtime();
 
@@ -124,9 +160,15 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
 
   if (current_prof_irep) {
     newirep = current_prof_irep;
+
+    //Executing a new method
     if (current_prof_irep->irep != irep) {
       int i;
 
+      //Update info from calling instruction
+      //XXX - wouldn't it be simplier to store the last fetched
+      //instruction and assume that it was used to get to the new irep?
+      //Though, there would be the issue of 'return' statements...
       for (i = 0; i < current_prof_irep->child_num; i++) {
         if (current_prof_irep->child[i]->irep == irep) {
           current_prof_irep->ccall_num[i]++;
@@ -135,22 +177,27 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
         }
       }
 
-      for (newirep= current_prof_irep->parent;
+      //XXX - check for circular dependency?
+      for (newirep = current_prof_irep->parent;
           newirep && newirep->irep != irep;
           newirep = newirep->parent);
       if (newirep) {
         goto finish;
       }
 
+      //Extend child irep list
       if (current_prof_irep->child_capa <= current_prof_irep->child_num) {
         struct prof_irep **tab;
         int *ccall;
         int size = current_prof_irep->child_capa * 2;
 
         current_prof_irep->child_capa = size;
-        tab = mrb_realloc(mrb, current_prof_irep->child, size * sizeof(struct prof_irep *));
+        tab = (struct prof_irep**)
+          mrb_realloc(mrb, current_prof_irep->child,
+                      size * sizeof(struct prof_irep *));
         current_prof_irep->child = tab;
-        ccall = mrb_realloc(mrb, current_prof_irep->ccall_num, size * sizeof(int));
+        ccall = (int*)
+          mrb_realloc(mrb, current_prof_irep->ccall_num, size * sizeof(int));
         current_prof_irep->ccall_num = ccall;
       }
 
@@ -162,6 +209,7 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
     }
   }
   else {
+    //First VM instruction
     newirep = mrb_profiler_alloc_prof_irep(mrb, irep, NULL);
     current_prof_irep = result.irep_root = newirep;
     old_pc = irep->iseq;
@@ -169,6 +217,7 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
   }
 
 finish:
+  //Update instruction level profilt info
   off = old_pc - current_prof_irep->irep->iseq;
   current_prof_irep->cnt[off].time += (curtime - old_time);
   current_prof_irep->cnt[off].num++;
@@ -177,22 +226,33 @@ finish:
   old_time = prof_curtime();
 }
 
-  static mrb_value
+//Get total number of profiled ireps
+static mrb_value
 mrb_mruby_profiler_irep_num(mrb_state *mrb, mrb_value self)
 {
+  (void) mrb;
+  (void) self;
   return mrb_fixnum_value(result.irep_num);
 }
 
-  static mrb_value
+//Get number of instructions in a given irep/method
+static mrb_value
 mrb_mruby_profiler_ilen(mrb_state *mrb, mrb_value self)
 {
   mrb_int irepno;
   mrb_get_args(mrb, "i", &irepno);
+  (void) self;
 
   return mrb_fixnum_value(result.irep_tab[irepno]->irep->ilen);
 }
 
-  static mrb_value
+//Read source file
+//
+//Arguments:
+// - file name
+//Returns:
+// - Array of files's contents split by newline
+static mrb_value
 mrb_mruby_profiler_read(mrb_state *mrb, mrb_value self)
 {
   char *fn;
@@ -200,6 +260,7 @@ mrb_mruby_profiler_read(mrb_state *mrb, mrb_value self)
   mrb_value res;
   FILE *fp;
   char buf[256];
+  (void) self;
 
   mrb_get_args(mrb, "s", &fn, &len);
   fn[len] = '\0';
@@ -217,6 +278,11 @@ mrb_mruby_profiler_read(mrb_state *mrb, mrb_value self)
   return res;
 }
 
+//Produce String representation of provided irep code
+//Arguments
+//  - mrb:  mruby state
+//  - irep: VM instruction's irep
+//  - c:    VM instruction
 static mrb_value
 mrb_mruby_profiler_disasm_once(mrb_state *mrb, mrb_irep *irep, mrb_code c)
 {
@@ -574,11 +640,23 @@ mrb_mruby_profiler_disasm_once(mrb_state *mrb, mrb_irep *irep, mrb_code c)
   return mrb_str_new_cstr(mrb, buf);
 }
 
+//Get instruction profiling information
+//Arguments:
+// - irepno  - Instruction number
+// - iseqoff - Instruction sequence offset
+//Returns:
+// - Six value array
+//  0. File name or method name
+//  1. Line number of instruction (if available)
+//  2. Execution count of instruction
+//  3. Cumulative execution time
+//  4. Address
+//  5. Code
 static mrb_value
 mrb_mruby_profiler_get_inst_info(mrb_state *mrb, mrb_value self)
 {
-  mrb_int irepno;
-  mrb_int iseqoff;
+  mrb_int irepno=0;
+  mrb_int iseqoff=0;
   mrb_value res;
   const char *str;
   mrb_get_args(mrb, "ii", &irepno, &iseqoff);
@@ -624,14 +702,26 @@ mrb_mruby_profiler_get_inst_info(mrb_state *mrb, mrb_value self)
 
 #define IREP_ID(prof) (mrb_fixnum_value((mrb_int)((prof)->irep)))
 
+//Get irep information
+//Arguments:
+// - irepno  - Irep number
+//Returns:
+// - Six value array
+//  0. ID of IRep
+//  1. Class of method
+//  2. Method name
+//  3. File name (if available)
+//  4. Array of child IDs
+//  5. Array of call numbers to children
 static mrb_value
 mrb_mruby_profiler_get_irep_info(mrb_state *mrb, mrb_value self)
 {
-  mrb_int irepno;
+  mrb_int           irepno;
   struct prof_irep *profi;
-  mrb_value res;
-  mrb_value ary;
+  mrb_value         res;
+  mrb_value         ary;
   int i;
+  (void) self;
 
   mrb_get_args(mrb, "i", &irepno);
 
@@ -654,7 +744,7 @@ mrb_mruby_profiler_get_irep_info(mrb_state *mrb, mrb_value self)
     mrb_ary_push(mrb, res, mrb_nil_value());
   }
 
-  /* 4 Childs */
+  /* 4 Children */
   ary = mrb_ary_new_capa(mrb, profi->child_num);
   for (i = 0; i < profi->child_num; i++) {
     mrb_ary_push(mrb, ary, IREP_ID(profi->child[i]));
@@ -671,12 +761,16 @@ mrb_mruby_profiler_get_irep_info(mrb_state *mrb, mrb_value self)
   return res;
 }
 
+//Map C methods onto ruby
 void
 mrb_mruby_profiler_gem_init(mrb_state* mrb) {
   struct RObject *m;
 
+  //Preallocate results
   result.irep_capa = 64;
-  result.irep_tab = mrb_realloc(mrb, result.irep_tab, result.irep_capa * sizeof(struct prof_irep *));
+  result.irep_tab = (struct prof_irep**)
+    mrb_realloc(mrb, result.irep_tab,
+        result.irep_capa * sizeof(struct prof_irep *));
   result.irep_num = 0;
 
   m = (struct RObject *)mrb_define_module(mrb, "Profiler");
@@ -686,9 +780,12 @@ mrb_mruby_profiler_gem_init(mrb_state* mrb) {
       mrb_mruby_profiler_get_inst_info, MRB_ARGS_REQ(2));
   mrb_define_singleton_method(mrb, m, "get_irep_info",
       mrb_mruby_profiler_get_irep_info, MRB_ARGS_REQ(1));
-  mrb_define_singleton_method(mrb, m, "irep_num", mrb_mruby_profiler_irep_num, MRB_ARGS_NONE());
-  mrb_define_singleton_method(mrb, m, "ilen", mrb_mruby_profiler_ilen, MRB_ARGS_REQ(1));
-  mrb_define_singleton_method(mrb, m, "read", mrb_mruby_profiler_read, MRB_ARGS_REQ(1));
+  mrb_define_singleton_method(mrb, m, "irep_num",
+      mrb_mruby_profiler_irep_num, MRB_ARGS_NONE());
+  mrb_define_singleton_method(mrb, m, "ilen",
+      mrb_mruby_profiler_ilen, MRB_ARGS_REQ(1));
+  mrb_define_singleton_method(mrb, m, "read",
+      mrb_mruby_profiler_read, MRB_ARGS_REQ(1));
 }
 
 void

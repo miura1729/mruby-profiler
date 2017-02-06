@@ -1,4 +1,9 @@
 module Profiler
+  #Perform analysis on the collected profile information
+  #
+  # Note: if profiling an embedded mruby instance be aware that the execution
+  #       time of the return instruction leaving the mruby VM will be
+  #       overestimated
   def self.analyze
     if ARGV[0] == "-k" then
       analyze_kcached
@@ -7,12 +12,23 @@ module Profiler
     end
   end
 
+  #Produce a kcachegrind compatiable output to STDOUT
+  #
+  #Note: There appears to be some issue in the output including:
+  #      1. Multiple traces of the same method (with different callstacks)
+  #      2. Incorrect estimates of cumulative call costs (see lines after
+  #         'calls='
+  #      3. Multiple methods using the same IREP sequence (it's unclear if mruby
+  #         is mapping different methods to the same IREP instance if the locals
+  #         and VM code sequence is the same. If it is, then IREP pointers are
+  #         no longer a valid UUID for a method call).
   def self.analyze_kcached
     ireps = {}
     print("version: 1\n")
     print("positions: address\n")
     print("events: ticks\n")
 
+    #Build map of irep addresses to alias numbers
     irep_num.times do |ino|
       insir = get_irep_info(ino)
       ireps[insir[0]] = ino
@@ -44,8 +60,17 @@ module Profiler
     end
   end
 
+  #Display normal mixed source level/VM level analysis of traced results
+  #
+  #The default format is:
+  #
+  #LINE TIME_SECONDS SOURCE_LINE
+  #     NUM_EXECUTIONS TIME_SECONDS DECODED_VM_INSTRUCTION
   def self.analyze_normal
+
+    #Known source
     files = {}
+    #Methods without corresponding source
     nosrc = {}
     ftab = {}
     irep_num.times do |ino|
@@ -69,6 +94,8 @@ module Profiler
       end
     end
 
+    #Print stats for each line and disassembled VM instructions
+    #which correspond to each line
     files.each do |fn, infos|
       lines = read(fn)
       lines.each_with_index do |lin, i|
@@ -84,17 +111,17 @@ module Profiler
         end
 
         #   Execute Count
-#        print(sprintf("%04d %10d %s", i, num, lin))
+        #        print(sprintf("%04d %10d %s", i, num, lin))
 
         #   Execute Time
         print(sprintf("%04d %7.5f %s", i, time, lin))
 
         #   Execute Time per 1 instruction
-#        if num != 0 then
-#          print(sprintf("%04d %4.5f %s", i, time / num, lin))
-#        else
-#          print(sprintf("%04d %4.5f %s", i, 0.0, lin))
-#        end
+        #        if num != 0 then
+        #          print(sprintf("%04d %4.5f %s", i, time / num, lin))
+        #        else
+        #          print(sprintf("%04d %4.5f %s", i, 0.0, lin))
+        #        end
         if infos[i + 1] then
           codes = {}
           infos[i + 1].each do |info|
@@ -114,6 +141,7 @@ module Profiler
       end
     end
 
+    #Dump stats for lines without any source level information
     nosrc.each do |mn, infos|
       codes = {}
       infos.each do |info|
