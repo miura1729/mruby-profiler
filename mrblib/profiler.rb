@@ -21,14 +21,27 @@ module Profiler
   #         no longer a valid UUID for a method call).
   def self.analyze_kcached
     ireps = {}
+    ireps2 = {}
     print("version: 1\n")
-    print("positions: address\n")
+    print("positions: instr\n")
     print("events: ticks\n")
+    virtuals = []
 
     #Build map of irep addresses to alias numbers
     irep_num.times do |ino|
       insir = get_irep_info(ino)
-      ireps[insir[0]] = ino
+      id    = insir[0]
+      meth  = "#{insir[1]}##{insir[2]}"
+      if(ireps.include?(id))
+        if(ireps2[id] == meth)
+          #puts "duplicate address?"
+        else
+          #puts "duplicate and invalid address?"
+          virtuals << meth
+        end
+      end
+      ireps[id] = ino
+      ireps2[id] = meth
       print("fl=(#{ino}) #{insir[3]}\n") if insir[3]
       print("fn=(#{ino}) #{insir[1]}##{insir[2]}\n")
     end
@@ -36,23 +49,26 @@ module Profiler
     irep_num.times do |ino|
       insir = get_irep_info(ino)
       irepno = ireps[insir[0]]
-      print("fl=(#{irepno})#{insir[3]}\n") if insir[3]
-      print("fn=(#{irepno})#{insir[1]}##{insir[2]}\n")
+      print("fl=(#{irepno}) #{insir[3]}\n") if insir[3]
+      print("fn=(#{irepno}) #{insir[1]}##{insir[2]}\n")
 
       ilen(ino).times do |ioff|
         insin = get_inst_info(ino, ioff)
-        print("0x#{insir[0]} #{insin[1]} #{(insin[3] * 10000000).to_i}\n")
+        next if (insin[3] * 10000000).to_i == 0
+        print("#{insir[0]} #{(insin[3] * 10000000).to_i}\n")
       end
 
       childs = insir[4]
       ccalls = insir[5]
       childs.size.times do |cno|
-        irepno = ireps[childs[cno]]
-        irep = get_irep_info(irepno)
-        print("cfl=(#{irepno}) #{irep[3]}\n") if irep[3]
-        print("cfn=(#{irepno}) #{irep[1]}##{irep[2]}\n")
+        ch_irepno = ireps[childs[cno]]
+        next if(ch_irepno.nil?)
+        ch_irep = get_irep_info(ch_irepno)
+        print("cfl=(#{ch_irepno}) #{ch_irep[3]}\n") if ch_irep[3]
+        print("cfn=(#{ch_irepno}) #{ch_irep[1]}##{ch_irep[2]}\n")
         print("calls=#{ccalls[cno]} +1\n")
-        print("#{irep[0]} 1000\n")
+        print("#{ch_irep[0]} 1000\n")
+        #print("1 1000\n")
       end
     end
   end
