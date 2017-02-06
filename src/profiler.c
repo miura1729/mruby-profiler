@@ -88,13 +88,13 @@ prof_curtime()
   unsigned long ctimelo;
 
   asm volatile ("rdtsc\n\t"
-		:
-		:
-		: "%eax", "%edx");
+    :
+    :
+    : "%eax", "%edx");
   asm volatile ("mov %%eax, %0\n\t"
-		:"=r"(ctimelo));
+    :"=r"(ctimelo));
   asm volatile ("mov %%edx, %0\n\t"
-		:"=r"(ctimehi));
+    :"=r"(ctimehi));
   curtime = ((double)ctimehi) * 256.0;
   curtime += ((double)ctimelo / (65536.0 * 256.0));
 #else
@@ -128,30 +128,30 @@ prof_code_fetch_hook(struct mrb_state *mrb, struct mrb_irep *irep, mrb_code *pc,
       int i;
 
       for (i = 0; i < current_prof_irep->child_num; i++) {
-	if (current_prof_irep->child[i]->irep == irep) {
-	  current_prof_irep->ccall_num[i]++;
-	  newirep = current_prof_irep->child[i];
-	  goto finish;
-	}
+  if (current_prof_irep->child[i]->irep == irep) {
+    current_prof_irep->ccall_num[i]++;
+    newirep = current_prof_irep->child[i];
+    goto finish;
+  }
       }
 
       for (newirep= current_prof_irep->parent; 
-	   newirep && newirep->irep != irep;
-	   newirep = newirep->parent);
+     newirep && newirep->irep != irep;
+     newirep = newirep->parent);
       if (newirep) {
-	goto finish;
+  goto finish;
       }
 
       if (current_prof_irep->child_capa <= current_prof_irep->child_num) {
-	struct prof_irep **tab;
-	int *ccall;
-	int size = current_prof_irep->child_capa * 2;
+  struct prof_irep **tab;
+  int *ccall;
+  int size = current_prof_irep->child_capa * 2;
 
-	current_prof_irep->child_capa = size;
-	tab = mrb_realloc(mrb, current_prof_irep->child, size * sizeof(struct prof_irep *));
-	current_prof_irep->child = tab;
-	ccall = mrb_realloc(mrb, current_prof_irep->ccall_num, size * sizeof(int));
-	current_prof_irep->ccall_num = ccall;
+  current_prof_irep->child_capa = size;
+  tab = mrb_realloc(mrb, current_prof_irep->child, size * sizeof(struct prof_irep *));
+  current_prof_irep->child = tab;
+  ccall = mrb_realloc(mrb, current_prof_irep->ccall_num, size * sizeof(int));
+  current_prof_irep->ccall_num = ccall;
       }
 
       newirep = mrb_profiler_alloc_prof_irep(mrb, irep, current_prof_irep);
@@ -245,7 +245,7 @@ mrb_mruby_profiler_disasm_once(mrb_state *mrb, mrb_irep *irep, mrb_code c)
     break;
   case OP_LOADSYM:
     sprintf(buf, "OP_LOADSYM\tR%d\t:%s", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]));
+     mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_LOADNIL:
@@ -266,67 +266,67 @@ mrb_mruby_profiler_disasm_once(mrb_state *mrb, mrb_irep *irep, mrb_code c)
     break;
   case OP_GETGLOBAL:
     sprintf(buf, "OP_GETGLOBAL\tR%d\t:%s", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]));
+     mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_SETGLOBAL:
     sprintf(buf, "OP_SETGLOBAL\t:%s\tR%d",
-	   mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]),
-	   GETARG_A(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]),
+     GETARG_A(c));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_GETCONST:
     sprintf(buf, "OP_GETCONST\tR%d\t:%s", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]));
+     mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_SETCONST:
     sprintf(buf, "OP_SETCONST\t:%s\tR%d",
-	   mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]),
-	   GETARG_A(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]),
+     GETARG_A(c));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_GETMCNST:
     sprintf(buf, "OP_GETMCNST\tR%d\tR%d::%s", GETARG_A(c), GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]));
+     mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]));
     //print_lv(mrb, irep, c, RAB);
     break;
   case OP_SETMCNST:
     sprintf(buf, "OP_SETMCNST\tR%d::%s\tR%d", GETARG_A(c)+1,
-	   mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]),
-	   GETARG_A(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]),
+     GETARG_A(c));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_GETIV:
     sprintf(buf, "OP_GETIV\tR%d\t%s", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]));
+     mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_SETIV:
     sprintf(buf, "OP_SETIV\t%s\tR%d",
-	   mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]),
-	   GETARG_A(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]),
+     GETARG_A(c));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_GETUPVAR:
     sprintf(buf, "OP_GETUPVAR\tR%d\t%d\t%d",
-	   GETARG_A(c), GETARG_B(c), GETARG_C(c));
+     GETARG_A(c), GETARG_B(c), GETARG_C(c));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_SETUPVAR:
     sprintf(buf, "OP_SETUPVAR\tR%d\t%d\t%d",
-	   GETARG_A(c), GETARG_B(c), GETARG_C(c));
+     GETARG_A(c), GETARG_B(c), GETARG_C(c));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_GETCV:
     sprintf(buf, "OP_GETCV\tR%d\t%s", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]));
+     mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_SETCV:
     sprintf(buf, "OP_SETCV\t%s\tR%d",
-	   mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]),
-	   GETARG_A(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_Bx(c)]),
+     GETARG_A(c));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_JMP:
@@ -340,41 +340,41 @@ mrb_mruby_profiler_disasm_once(mrb_state *mrb, mrb_irep *irep, mrb_code c)
     break;
   case OP_SEND:
     sprintf(buf, "OP_SEND\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_SENDB:
     sprintf(buf, "OP_SENDB\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_TAILCALL:
     sprintf(buf, "OP_TAILCALL\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_SUPER:
     sprintf(buf, "OP_SUPER\tR%d\t%d", GETARG_A(c),
-	   GETARG_C(c));
+     GETARG_C(c));
     break;
   case OP_ARGARY:
     sprintf(buf, "OP_ARGARY\tR%d\t%d:%d:%d:%d", GETARG_A(c),
-	   (GETARG_Bx(c)>>10)&0x3f,
-	   (GETARG_Bx(c)>>9)&0x1,
-	   (GETARG_Bx(c)>>4)&0x1f,
-	   (GETARG_Bx(c)>>0)&0xf);
+     (GETARG_Bx(c)>>10)&0x3f,
+     (GETARG_Bx(c)>>9)&0x1,
+     (GETARG_Bx(c)>>4)&0x1f,
+     (GETARG_Bx(c)>>0)&0xf);
     //print_lv(mrb, irep, c, RA);
     break;
 
   case OP_ENTER:
     sprintf(buf, "OP_ENTER\t%d:%d:%d:%d:%d:%d:%d",
-	   (GETARG_Ax(c)>>18)&0x1f,
-	   (GETARG_Ax(c)>>13)&0x1f,
-	   (GETARG_Ax(c)>>12)&0x1,
-	   (GETARG_Ax(c)>>7)&0x1f,
-	   (GETARG_Ax(c)>>2)&0x1f,
-	   (GETARG_Ax(c)>>1)&0x1,
-	   GETARG_Ax(c) & 0x1);
+     (GETARG_Ax(c)>>18)&0x1f,
+     (GETARG_Ax(c)>>13)&0x1f,
+     (GETARG_Ax(c)>>12)&0x1,
+     (GETARG_Ax(c)>>7)&0x1f,
+     (GETARG_Ax(c)>>2)&0x1f,
+     (GETARG_Ax(c)>>1)&0x1,
+     GETARG_Ax(c) & 0x1);
     break;
   case OP_RETURN:
     sprintf(buf, "OP_RETURN\tR%d", GETARG_A(c));
@@ -392,10 +392,10 @@ mrb_mruby_profiler_disasm_once(mrb_state *mrb, mrb_irep *irep, mrb_code c)
     break;
   case OP_BLKPUSH:
     sprintf(buf, "OP_BLKPUSH\tR%d\t%d:%d:%d:%d", GETARG_A(c),
-	   (GETARG_Bx(c)>>10)&0x3f,
-	   (GETARG_Bx(c)>>9)&0x1,
-	   (GETARG_Bx(c)>>4)&0x1f,
-	   (GETARG_Bx(c)>>0)&0xf);
+     (GETARG_Bx(c)>>10)&0x3f,
+     (GETARG_Bx(c)>>9)&0x1,
+     (GETARG_Bx(c)>>4)&0x1f,
+     (GETARG_Bx(c)>>0)&0xf);
     //print_lv(mrb, irep, c, RA);
     break;
 
@@ -409,64 +409,64 @@ mrb_mruby_profiler_disasm_once(mrb_state *mrb, mrb_irep *irep, mrb_code c)
     break;
   case OP_METHOD:
     sprintf(buf, "OP_METHOD\tR%d\t:%s", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]));
     //print_lv(mrb, irep, c, RA);
     break;
 
   case OP_ADD:
     sprintf(buf, "OP_ADD\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_ADDI:
     sprintf(buf, "OP_ADDI\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_SUB:
     sprintf(buf, "OP_SUB\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_SUBI:
     sprintf(buf, "OP_SUBI\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_MUL:
     sprintf(buf, "OP_MUL\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_DIV:
     sprintf(buf, "OP_DIV\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_LT:
     sprintf(buf, "OP_LT\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_LE:
     sprintf(buf, "OP_LE\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_GT:
     sprintf(buf, "OP_GT\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_GE:
     sprintf(buf, "OP_GE\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
   case OP_EQ:
     sprintf(buf, "OP_EQ\tR%d\t:%s\t%d", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
-	   GETARG_C(c));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]),
+     GETARG_C(c));
     break;
 
   case OP_STOP:
@@ -516,12 +516,12 @@ mrb_mruby_profiler_disasm_once(mrb_state *mrb, mrb_irep *irep, mrb_code c)
     break;
   case OP_CLASS:
     sprintf(buf, "OP_CLASS\tR%d\t:%s", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_MODULE:
     sprintf(buf, "OP_MODULE\tR%d\t:%s", GETARG_A(c),
-	   mrb_sym2name(mrb, irep->syms[GETARG_B(c)]));
+     mrb_sym2name(mrb, irep->syms[GETARG_B(c)]));
     //print_lv(mrb, irep, c, RA);
     break;
   case OP_EXEC:
@@ -567,7 +567,7 @@ mrb_mruby_profiler_disasm_once(mrb_state *mrb, mrb_irep *irep, mrb_code c)
 
   default:
     sprintf(buf, "OP_unknown %d\t%d\t%d\t%d", GET_OPCODE(c),
-	   GETARG_A(c), GETARG_B(c), GETARG_C(c));
+     GETARG_A(c), GETARG_B(c), GETARG_C(c));
     break;
   }
 
@@ -600,7 +600,7 @@ mrb_mruby_profiler_get_inst_info(mrb_state *mrb, mrb_value self)
   /* 1 Line no */
   if (result.irep_tab[irepno]->irep->lines) {
     mrb_ary_push(mrb, res, 
-		 mrb_fixnum_value(result.irep_tab[irepno]->irep->lines[iseqoff]));
+     mrb_fixnum_value(result.irep_tab[irepno]->irep->lines[iseqoff]));
   }
   else {
     mrb_ary_push(mrb, res, mrb_nil_value());
@@ -608,10 +608,10 @@ mrb_mruby_profiler_get_inst_info(mrb_state *mrb, mrb_value self)
 
   /* 2 Execution Count */
   mrb_ary_push(mrb, res, 
-	       mrb_fixnum_value(result.irep_tab[irepno]->cnt[iseqoff].num));
+         mrb_fixnum_value(result.irep_tab[irepno]->cnt[iseqoff].num));
   /* 3 Execution Time */
   mrb_ary_push(mrb, res, 
-	       mrb_float_value(mrb, result.irep_tab[irepno]->cnt[iseqoff].time));
+         mrb_float_value(mrb, result.irep_tab[irepno]->cnt[iseqoff].time));
   
   /* 4 Address */
   mrb_ary_push(mrb, res, mrb_fixnum_value((mrb_int)&result.irep_tab[irepno]->irep->iseq[iseqoff]));
@@ -683,9 +683,9 @@ mrb_mruby_profiler_gem_init(mrb_state* mrb) {
   prof_module = mrb_obj_value(m);
   mrb->code_fetch_hook = prof_code_fetch_hook;
   mrb_define_singleton_method(mrb, m, "get_inst_info",  
-			      mrb_mruby_profiler_get_inst_info, MRB_ARGS_REQ(2));
+            mrb_mruby_profiler_get_inst_info, MRB_ARGS_REQ(2));
   mrb_define_singleton_method(mrb, m, "get_irep_info",  
-			      mrb_mruby_profiler_get_irep_info, MRB_ARGS_REQ(1));
+            mrb_mruby_profiler_get_irep_info, MRB_ARGS_REQ(1));
   mrb_define_singleton_method(mrb, m, "irep_num", mrb_mruby_profiler_irep_num, MRB_ARGS_NONE());
   mrb_define_singleton_method(mrb, m, "ilen", mrb_mruby_profiler_ilen, MRB_ARGS_REQ(1));
   mrb_define_singleton_method(mrb, m, "read", mrb_mruby_profiler_read, MRB_ARGS_REQ(1));
