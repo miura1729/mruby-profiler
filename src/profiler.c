@@ -7,6 +7,7 @@
 #include "mruby/debug.h"
 #include "mruby/opcode.h"
 #include "mruby/string.h"
+#include "mruby/proc.h"
 #include <time.h>
 #include <sys/time.h>
 #include <stdlib.h>
@@ -21,8 +22,8 @@ struct prof_counter {
 
 struct prof_irep {
   mrb_irep *irep;           //VM instructions
-  mrb_sym name;        //Method name
-  mrb_value klass;        //Class implementing method
+  const char *mname;        //Method name
+  const char *klass;        //Class implementing method
   struct prof_counter *cnt; //Profiler results
 
   int child_num;            //Number of called methods
@@ -51,6 +52,43 @@ static double old_time = 0.0;
 //Profiler module
 static mrb_value prof_module;
 
+#define TO_S(x) strdup(mrb_string_value_ptr(mrb, mrb_obj_value(x)))
+
+//Get class which appears to define the current method
+//
+//Arguments:
+//  - mrb: mruby state
+//  - irep: active method
+static const char *
+get_class(mrb_state *mrb, struct mrb_irep *irep)
+{
+  //Get root class from VM stack
+  struct RClass *c    = mrb_class(mrb, mrb->c->stack[0]);
+  struct RClass *cc   = c;
+
+  //Get class#method
+  struct RProc  *proc = mrb_method_search_vm(mrb, &cc, mrb->c->ci->mid);
+  const  mrb_sym m    = mrb_intern_cstr(mrb, "to_s");
+
+  //If method couldn't be retrieved or it's invalid, just use the original class
+  //(mruby bug?)
+  if(!proc || !mrb_respond_to(mrb, mrb_obj_value(cc), m)) {
+    return TO_S(c);
+  }
+
+
+  //While the method definition doesn't match, try superclasses
+  while(proc->body.irep != irep) {
+    cc = cc->super;
+    proc = mrb_method_search_vm(mrb, &cc, mrb->c->ci->mid);
+    if(!cc || !proc || !mrb_respond_to(mrb, mrb_obj_value(cc), m)) {
+      return TO_S(c);
+    }
+  }
+
+  return TO_S(cc);
+}
+
 //Allocate a new set of profiler metadata for a new method's irep
 //
 //Arguments:
@@ -69,8 +107,14 @@ mrb_profiler_alloc_prof_irep(mrb_state* mrb,
 
   res->parent = parent;
   res->irep = irep;
-  res->mname = mrb->c->ci->mid;
-  res->klass = mrb_obj_value(mrb_class(mrb, mrb->c->stack[0]));
+
+  //Grab a copy of the method name and class
+  res->mname = mrb_sym2name(mrb, mrb->c->ci->mid);
+  if(res->mname)
+    res->mname = strdup(res->mname);
+  else
+    res->mname = strdup("");
+  res->klass = get_class(mrb, irep);
   irep->refcnt++;
 
   //Allocate per instruction counters
@@ -247,6 +291,15 @@ mrb_mruby_profiler_ilen(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(result.irep_tab[irepno]->irep->ilen);
 }
 
+//Get number of instructions in a given irep/method
+static mrb_value
+mrb_mruby_profiler_irep_id(mrb_state *mrb, void *v)
+{
+  char addr[128];
+  snprintf(addr, sizeof(addr), "%p", v);
+  return mrb_str_new_cstr(mrb, addr);
+}
+
 //Read source file
 //
 //Arguments:
@@ -270,7 +323,7 @@ mrb_mruby_profiler_read(mrb_state *mrb, mrb_value self)
   fp = fopen(fn, "r");
   while (fgets(buf, 255, fp)) {
     int ai = mrb_gc_arena_save(mrb);
-    mrb_value ele = mrb_str_new(mrb, buf, strlen(buf));
+    mrb_value ele = mrb_str_new_cstr(mrb, buf);
 
     mrb_ary_push(mrb, res, ele);
     mrb_gc_arena_restore(mrb, ai);
@@ -629,48 +682,53 @@ mrb_mruby_profiler_get_inst_info(mrb_state *mrb, mrb_value self)
   mrb_int iseqoff=0;
   mrb_value res;
   const char *str;
+  struct prof_irep *prof;
+  mrb_code *code;
+  char addr[128];
+  (void) self;
   mrb_get_args(mrb, "ii", &irepno, &iseqoff);
 
-  res = mrb_ary_new_capa(mrb, 7);
-  /* 0 fine name or method name */
-  str = result.irep_tab[irepno]->irep->filename;
+  res  = mrb_ary_new_capa(mrb, 7);
+  prof = result.irep_tab[irepno];
+  /* 0 file name or method name */
+  str  = prof->irep->filename;
   if (str) {
-    mrb_ary_push(mrb, res, mrb_str_new(mrb, str, strlen(str)));
+    mrb_ary_push(mrb, res, mrb_str_new_cstr(mrb, str));
   }
   else {
     mrb_value cls_mname = mrb_ary_new_capa(mrb, 2);
-    mrb_ary_push(mrb, cls_mname, result.irep_tab[irepno]->klass);
-    mrb_ary_push(mrb, cls_mname, mrb_symbol_value(result.irep_tab[irepno]->mname));
+    mrb_ary_push(mrb, cls_mname, mrb_str_new_cstr(mrb,prof->klass));
+    mrb_ary_push(mrb, cls_mname, mrb_str_new_cstr(mrb,prof->mname));
 
     mrb_ary_push(mrb, res, cls_mname);
   }
 
   /* 1 Line no */
-  if (result.irep_tab[irepno]->irep->lines) {
-    mrb_ary_push(mrb, res,
-        mrb_fixnum_value(result.irep_tab[irepno]->irep->lines[iseqoff]));
+  if (prof->irep->lines) {
+    mrb_ary_push(mrb, res, mrb_fixnum_value(prof->irep->lines[iseqoff]));
   }
   else {
     mrb_ary_push(mrb, res, mrb_nil_value());
   }
 
   /* 2 Execution Count */
-  mrb_ary_push(mrb, res,
-      mrb_fixnum_value(result.irep_tab[irepno]->cnt[iseqoff].num));
+  mrb_ary_push(mrb, res, mrb_fixnum_value(prof->cnt[iseqoff].num));
   /* 3 Execution Time */
-  mrb_ary_push(mrb, res,
-      mrb_float_value(mrb, result.irep_tab[irepno]->cnt[iseqoff].time));
+  mrb_ary_push(mrb, res, mrb_float_value(mrb, prof->cnt[iseqoff].time));
 
   /* 4 Address */
-  mrb_ary_push(mrb, res, mrb_fixnum_value((mrb_int)&result.irep_tab[irepno]->irep->iseq[iseqoff]));
+  code = &prof->irep->iseq[iseqoff];
+  snprintf(addr, sizeof(addr), "%p", code);
+  mrb_ary_push(mrb, res, mrb_str_new_cstr(mrb, addr));
+
   /* 5 code   */
-  //  mrb_ary_push(mrb, res, mrb_fixnum_value(result.irep_tab[irepno]->irep->iseq[iseqoff]));
-  mrb_ary_push(mrb, res, mrb_mruby_profiler_disasm_once(mrb, result.irep_tab[irepno]->irep, result.irep_tab[irepno]->irep->iseq[iseqoff]));
+  mrb_ary_push(mrb, res,
+      mrb_mruby_profiler_disasm_once(mrb, prof->irep, *code));
 
   return res;
 }
 
-#define IREP_ID(prof) (mrb_fixnum_value((mrb_int)((prof)->irep)))
+#define IREP_ID(prof) (mrb_mruby_profiler_irep_id(mrb, (prof)->irep))
 
 //Get irep information
 //Arguments:
@@ -690,25 +748,28 @@ mrb_mruby_profiler_get_irep_info(mrb_state *mrb, mrb_value self)
   struct prof_irep *profi;
   mrb_value         res;
   mrb_value         ary;
+  const char       *filename;
   int i;
   (void) self;
 
   mrb_get_args(mrb, "i", &irepno);
 
+  int ai = mrb_gc_arena_save(mrb);
   res = mrb_ary_new_capa(mrb, 3);
   profi = result.irep_tab[irepno];
   /* 0 id of irep */
   mrb_ary_push(mrb, res, IREP_ID(profi));
 
   /* 1 Class of method */
-  mrb_ary_push(mrb, res, profi->klass);
+  mrb_ary_push(mrb, res, mrb_str_new_cstr(mrb,profi->klass));
 
   /* 2 method name */
-  mrb_ary_push(mrb, res, mrb_symbol_value(profi->mname));
+  mrb_ary_push(mrb, res, mrb_str_new_cstr(mrb,profi->mname));
 
   /* 3 file name */
-  if (profi->irep->filename) {
-    mrb_ary_push(mrb, res, mrb_str_new(mrb, profi->irep->filename, strlen(profi->irep->filename)));
+  filename = profi->irep->filename;
+  if (filename) {
+    mrb_ary_push(mrb, res, mrb_str_new_cstr(mrb, filename));
   }
   else {
     mrb_ary_push(mrb, res, mrb_nil_value());
@@ -727,6 +788,7 @@ mrb_mruby_profiler_get_irep_info(mrb_state *mrb, mrb_value self)
     mrb_ary_push(mrb, ary, mrb_fixnum_value(profi->ccall_num[i]));
   }
   mrb_ary_push(mrb, res, ary);
+  mrb_gc_arena_restore(mrb, ai);
 
   return res;
 }
