@@ -63,30 +63,30 @@ mrb_profiler_alloc_prof_irep(mrb_state* mrb,
                              struct prof_irep *parent)
 {
   int i;
-  struct prof_irep *new;
+  struct prof_irep *res;
 
-  new = mrb_malloc(mrb, sizeof(struct prof_irep));
+  res = (struct prof_irep*)mrb_malloc(mrb, sizeof(struct prof_irep));
 
-  new->parent = parent;
-  new->irep = irep;
-  new->mname = mrb->c->ci->mid;
-  new->klass = mrb_obj_value(mrb_class(mrb, mrb->c->stack[0]));
+  res->parent = parent;
+  res->irep = irep;
+  res->mname = mrb->c->ci->mid;
+  res->klass = mrb_obj_value(mrb_class(mrb, mrb->c->stack[0]));
   irep->refcnt++;
 
   //Allocate per instruction counters
-  new->cnt = (struct prof_counter*)
+  res->cnt = (struct prof_counter*)
       mrb_malloc(mrb, irep->ilen * sizeof(struct prof_counter));
   for (i = 0; i < irep->ilen; i++) {
-    new->cnt[i].num = 0;
-    new->cnt[i].time = 0.0;
+    res->cnt[i].num = 0;
+    res->cnt[i].time = 0.0;
   }
 
   //Preallocate child array
-  new->child_num = 0;
-  new->child_capa = 4;
-  new->child = (struct prof_irep**)
-      mrb_malloc(mrb, new->child_capa * sizeof(struct prof_irep *));
-  new->ccall_num = (int*)mrb_malloc(mrb, new->child_capa * sizeof(int));
+  res->child_num  = 0;
+  res->child_capa = 4;
+  res->child      = (struct prof_irep**)
+      mrb_malloc(mrb, res->child_capa * sizeof(struct prof_irep *));
+  res->ccall_num  = (int*)mrb_malloc(mrb, res->child_capa * sizeof(int));
 
   //Add to the global profiler results
   if (result.irep_capa <= result.irep_num) {
@@ -95,10 +95,10 @@ mrb_profiler_alloc_prof_irep(mrb_state* mrb,
         mrb_realloc(mrb, result.irep_tab, size * sizeof(struct prof_irep *));
     result.irep_capa = size;
   }
-  result.irep_tab[result.irep_num] = new;
+  result.irep_tab[result.irep_num] = res;
   result.irep_num++;
 
-  return new;
+  return res;
 }
 
 //Get current time in seconds
