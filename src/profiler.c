@@ -62,7 +62,7 @@ mrb_profiler_alloc_prof_irep(mrb_state* mrb,
                              struct mrb_irep *irep,
                              struct prof_irep *parent)
 {
-  int i;
+  size_t i;
   struct prof_irep *res;
 
   res = (struct prof_irep*)mrb_malloc(mrb, sizeof(struct prof_irep));
