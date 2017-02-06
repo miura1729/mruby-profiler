@@ -5,11 +5,8 @@ module Profiler
   #       time of the return instruction leaving the mruby VM will be
   #       overestimated
   def self.analyze
-    if ARGV[0] == "-k" then
-      analyze_kcached
-    else
       analyze_normal
-    end
+      #analyze_kcached
   end
 
   #Produce a kcachegrind compatiable output to STDOUT
