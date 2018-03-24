@@ -65,9 +65,19 @@ get_class(mrb_state *mrb, struct mrb_irep *irep)
   //Get root class from VM stack
   struct RClass *c    = mrb_class(mrb, mrb->c->stack[0]);
   struct RClass *cc   = c;
+  struct RProc  *proc;
 
   //Get class#method
-  struct RProc  *proc = mrb_method_search_vm(mrb, &cc, mrb->c->ci->mid);
+#if (MRUBY_RELEASE_MAJOR == 1 && MRUBY_RELEASE_MINOR >= 4) || MRUBY_RELEASE_MAJOR > 1
+  #if defined(MRB_METHOD_TABLE_INLINE)
+    mrb_raise(mrb, mrb->eException_class, "profiling not supported when using MRB_METHOD_TABLE_INLINE");
+  #else
+    mrb_method_t meth = mrb_method_search_vm(mrb, &cc, mrb->c->ci->mid);
+    proc = meth.proc;
+  #endif
+#else
+  proc = mrb_method_search_vm(mrb, &cc, mrb->c->ci->mid);
+#endif
   const  mrb_sym m    = mrb_intern_cstr(mrb, "to_s");
 
   //If method couldn't be retrieved or it's invalid, just use the original class
@@ -80,7 +90,16 @@ get_class(mrb_state *mrb, struct mrb_irep *irep)
   //While the method definition doesn't match, try superclasses
   while(proc->body.irep != irep) {
     cc = cc->super;
+#if (MRUBY_RELEASE_MAJOR == 1 && MRUBY_RELEASE_MINOR >= 4) || MRUBY_RELEASE_MAJOR > 1
+    #if defined(MRB_METHOD_TABLE_INLINE)
+      mrb_raise(mrb, mrb->eException_class, "profiling not supported when using MRB_METHOD_TABLE_INLINE");
+    #else
+      meth = mrb_method_search_vm(mrb, &cc, mrb->c->ci->mid);
+      proc = meth.proc;
+    #endif
+#else
     proc = mrb_method_search_vm(mrb, &cc, mrb->c->ci->mid);
+#endif
     if(!cc || !proc || !mrb_respond_to(mrb, mrb_obj_value(cc), m)) {
       return TO_S(c);
     }
